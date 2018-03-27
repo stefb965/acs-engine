@@ -43,7 +43,7 @@
       },
       "type": "Microsoft.Network/networkInterfaces"
     },
-{{if .IsManagedDisks}} 
+{{if .IsManagedDisks}}
    {
       "location": "[variables('location')]",
       "name": "[variables('{{.Name}}AvailabilitySet')]",
@@ -54,7 +54,7 @@
             "platformUpdateDomainCount": 3,
 		"managed" : "true"
         },
-  
+
       "type": "Microsoft.Compute/availabilitySets"
     },
 {{else if .IsStorageAccount}}
@@ -107,7 +107,7 @@
       "properties": {},
       "type": "Microsoft.Compute/availabilitySets"
     },
-{{end}} 
+{{end}}
   {
     {{if .IsManagedDisks}}
       "apiVersion": "[variables('apiVersionStorageManagedDisks')]",
@@ -191,7 +191,7 @@
           {{if .IsStorageAccount}}
             ,"name": "[concat(variables('{{.Name}}VMNamePrefix'), copyIndex(variables('{{.Name}}Offset')),'-osdisk')]"
             ,"vhd": {
-              "uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/',variables('storageAccountPrefixes')[mod(add(div(copyIndex(variables('{{.Name}}Offset')),variables('maxVMsPerStorageAccount')),variables('{{.Name}}StorageAccountOffset')),variables('storageAccountPrefixesCount'))],variables('storageAccountPrefixes')[div(add(div(copyIndex(variables('{{.Name}}Offset')),variables('maxVMsPerStorageAccount')),variables('{{.Name}}StorageAccountOffset')),variables('storageAccountPrefixesCount'))],variables('{{.Name}}AccountName')),variables('apiVersionStorage')).primaryEndpoints.blob,'osdisk/', variables('{{.Name}}VMNamePrefix'), copyIndex(variables('{{.Name}}Offset')), '-osdisk.vhd')]"
+              "uri": "https://acstackimages.blob.core.windows.net/system/Microsoft.Compute/Images/acs-vhds/acstack-1522124889-osDisk.8d0e099c-0ed0-483e-9d53-053057eb13b0.vhd?se=2018-04-27T04%3A51%3A48Z&sig=VjMB%2BeiFywOQ0nHi5eg%2B%2FHLiI7kfV4TFXpjJxxk%2Benw%3D&sp=r&spr=https%2Chttp&sr=b&sv=2016-05-31"
             }
           {{end}}
           {{if ne .OSDiskSizeGB 0}}

@@ -1,27 +1,6 @@
 #cloud-config
 
-{{if not .MasterProfile.IsCoreOS}}
-packages:
- - jq
- - traceroute
-{{end}}
-
 write_files:
-- path: "/opt/azure/containers/provision_source.sh"
-  permissions: "0744"
-  encoding: gzip
-  owner: "root"
-  content: !!binary |
-    {{WrapAsVariable "provisionSource"}}
-
-{{if not .MasterProfile.IsCoreOS}}
-- path: "/etc/systemd/system/docker.service.d/clear_mount_propagation_flags.conf"
-  permissions: "0644"
-  owner: "root"
-  content: |
-    [Service]
-    MountFlags=shared
-{{end}}
 
 - path: "/etc/systemd/system/docker.service.d/exec_start.conf"
   permissions: "0644"
@@ -29,23 +8,7 @@ write_files:
   content: |
     [Service]
     ExecStart=
-{{if .MasterProfile.IsCoreOS}}
-    ExecStart=/usr/bin/env PATH=${TORCX_BINDIR}:${PATH} ${TORCX_BINDIR}/dockerd --host=fd:// --containerd=/var/run/docker/libcontainerd/docker-containerd.sock --storage-driver=overlay2 --bip={{WrapAsVariable "dockerBridgeCidr"}} $DOCKER_SELINUX $DOCKER_OPTS $DOCKER_CGROUPS $DOCKER_OPT_BIP $DOCKER_OPT_MTU $DOCKER_OPT_IPMASQ
-{{else}}
     ExecStart=/usr/bin/docker daemon -H fd:// --storage-driver=overlay2 --bip={{WrapAsVariable "dockerBridgeCidr"}}
-{{end}}
-- path: "/etc/docker/daemon.json"
-  permissions: "0644"
-  owner: "root"
-  content: |
-    {
-      "live-restore": true,
-      "log-driver": "json-file",
-      "log-opts":  {
-         "max-size": "50m",
-         "max-file": "5"
-      }
-    }
 
 - path: "/etc/kubernetes/certs/ca.crt"
   permissions: "0644"
@@ -123,11 +86,7 @@ MASTER_ADDONS_CONFIG_PLACEHOLDER
     Description=Kubectl extraction
     Requires=docker.service
     After=docker.service
-{{if .MasterProfile.IsCoreOS}}
-    ConditionPathExists=!/opt/kubectl
-{{else}}
     ConditionPathExists=!/usr/local/bin/kubectl
-{{end}}
 
     [Service]
     TimeoutStartSec=0
@@ -136,13 +95,8 @@ MASTER_ADDONS_CONFIG_PLACEHOLDER
     ExecStartPre=/bin/mkdir -p /tmp/kubectldir
     ExecStartPre=/usr/bin/docker pull {{WrapAsVariable "kubernetesHyperkubeSpec"}}
     ExecStartPre=/usr/bin/docker run --rm -v /tmp/kubectldir:/opt/kubectldir {{WrapAsVariable "kubernetesHyperkubeSpec"}} /bin/bash -c "cp /hyperkube /opt/kubectldir/"
-{{if .MasterProfile.IsCoreOS}}
-    ExecStartPre=/bin/mv /tmp/kubectldir/hyperkube /opt/kubectl
-    ExecStart=/bin/chmod a+x /opt/kubectl
-{{else}}
     ExecStartPre=/bin/mv /tmp/kubectldir/hyperkube /usr/local/bin/kubectl
     ExecStart=/bin/chmod a+x /usr/local/bin/kubectl
-{{end}}
 
     [Install]
     WantedBy=multi-user.target
@@ -287,29 +241,6 @@ MASTER_ARTIFACTS_CONFIG_PLACEHOLDER
   content: !!binary |
     {{WrapAsVariable "mountetcdScript"}}
 
-- path: "/etc/systemd/system/etcd.service"
-  permissions: "0644"
-  owner: "root"
-  content: |
-    [Unit]
-    Description=etcd - highly-available key value store
-    Documentation=https://github.com/coreos/etcd
-    Documentation=man:etcd
-    After=network.target
-    Wants=network-online.target
-    [Service]
-    Environment=DAEMON_ARGS=
-    Environment=ETCD_NAME=%H
-    Environment=ETCD_DATA_DIR=
-    EnvironmentFile=-/etc/default/%p
-    Type=notify
-    User=etcd
-    PermissionsStartOnly=true
-    ExecStart=/usr/bin/etcd $DAEMON_ARGS
-    Restart=always
-    [Install]
-    WantedBy=multi-user.target
-
 - path: "/opt/azure/containers/setup-etcd.sh"
   permissions: "0744"
   owner: "root"
@@ -328,43 +259,6 @@ MASTER_ARTIFACTS_CONFIG_PLACEHOLDER
     sudo sed -i "1iETCDCTL_KEY_FILE={{WrapAsVariable "etcdClientKeyFilepath"}}" /etc/environment
     sudo sed -i "1iETCDCTL_CERT_FILE={{WrapAsVariable "etcdClientCertFilepath"}}" /etc/environment
 
-{{if .MasterProfile.IsCoreOS}}
-- path: "/opt/azure/containers/provision-setup.sh"
-  permissions: "0755"
-  owner: "root"
-  content: |
-    #!/bin/bash
-    # the first arg is the number of retries, the second arg is the wait duration between two retries and the rest of the args are the cmd to run
-    source /opt/azure/containers/provision_source.sh
-    /bin/echo DAEMON_ARGS=--name "{{WrapAsVerbatim "variables('masterVMNames')[copyIndex(variables('masterOffset'))]"}}" --initial-advertise-peer-urls "{{WrapAsVerbatim "variables('masterEtcdPeerURLs')[copyIndex(variables('masterOffset'))]"}}" --listen-peer-urls "{{WrapAsVerbatim "variables('masterEtcdPeerURLs')[copyIndex(variables('masterOffset'))]"}}" --advertise-client-urls "{{WrapAsVerbatim "variables('masterEtcdClientURLs')[copyIndex(variables('masterOffset'))]"}}" --listen-client-urls "{{WrapAsVerbatim "concat(variables('masterEtcdClientURLs')[copyIndex(variables('masterOffset'))], ',http://127.0.0.1:', variables('masterEtcdClientPort'))"}}" --initial-cluster-token "k8s-etcd-cluster" --initial-cluster "{{WrapAsVerbatim "variables('masterEtcdClusterStates')[div(variables('masterCount'), 2)]"}} --data-dir "/var/lib/etcddisk"" --initial-cluster-state "new" | tee -a /etc/default/etcd
-    /opt/azure/containers/mountetcd.sh
-    sudo /bin/chown -R etcd:etcd /var/lib/etcddisk
-    systemctl stop etcd-member
-    sudo /bin/sed -i s/Restart=on-failure/Restart=always/g /lib/systemd/system/etcd-member.service
-    systemctl daemon-reload
-    systemctl restart etcd-member
-    retrycmd_if_failure 5 5 10 curl --retry 5 --retry-delay 10 --retry-max-time 10 --max-time 60 http://127.0.0.1:2379/v2/machines
-    mkdir -p /etc/kubernetes/manifests
-    usermod -aG docker {{WrapAsVariable "username"}}
-
-    {{if EnableAggregatedAPIs}}
-    sudo bash /etc/kubernetes/generate-proxy-certs.sh
-    {{end}}
-
-    touch /opt/azure/containers/runcmd.complete
-
-coreos:
-  units:
-    - name: start-provision-setup.service
-      command: "start"
-      content: |
-        # Note: Initiated as a service since there is no runcmd within CoreOS on cloud-config/Ignition
-        [Unit]
-        Description=Start provision setup service
-
-        [Service]
-        ExecStart=/opt/azure/containers/provision-setup.sh
-{{else}}
 runcmd:
 # the first arg is the number of retries, the second arg is the wait duration between two retries and the rest of the args are the cmd to run
 - set -x
@@ -386,13 +280,8 @@ runcmd:
 - sudo etcdctl member update ${MEMBER} {{WrapAsVerbatim "variables('masterEtcdPeerURLs')[copyIndex(variables('masterOffset'))]"}}
 - retrycmd_if_failure 5 5 10 curl --cacert /etc/kubernetes/certs/ca.crt --cert /etc/kubernetes/certs/etcdclient.crt --key /etc/kubernetes/certs/etcdclient.key --retry 5 --retry-delay 10 --retry-max-time 10 --max-time 60 "{{WrapAsVerbatim "variables('masterEtcdClientURLs')[copyIndex(variables('masterOffset'))]"}}"/v2/machines
 - apt_get_update
-- retrycmd_if_failure 5 10 120 apt-get install -y apt-transport-https ca-certificates
-- retrycmd_if_failure_no_stats 180 1 5 curl -fsSL https://aptdocker.azureedge.net/gpg > /tmp/aptdocker.gpg
-- cat /tmp/aptdocker.gpg | apt-key add -
-- echo "deb {{WrapAsVariable "dockerEngineDownloadRepo"}} ubuntu-xenial main" | sudo tee /etc/apt/sources.list.d/docker.list
-- "echo \"Package: docker-engine\nPin: version {{WrapAsVariable "dockerEngineVersion"}}\nPin-Priority: 550\n\" > /etc/apt/preferences.d/docker.pref"
-- apt_get_update
-- retrycmd_if_failure 20 10 120 apt-get install -y ebtables docker-engine
+- retrycmd_if_failure 5 10 120 apt-get install -y apt-transport-https
+- retrycmd_if_failure 20 10 120 apt-get install -y ebtables
 - touch /opt/azure/containers/dockerinstall.complete
 - echo "ExecStartPost=/sbin/iptables -P FORWARD ACCEPT" >> /etc/systemd/system/docker.service.d/exec_start.conf
 - systemctl daemon-reload
@@ -405,4 +294,3 @@ runcmd:
 {{end}}
 - apt-mark unhold walinuxagent
 - touch /opt/azure/containers/runcmd.complete
-{{end}}

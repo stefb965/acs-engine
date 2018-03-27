@@ -1,4 +1,4 @@
-{{if .MasterProfile.IsManagedDisks}} 
+{{if .MasterProfile.IsManagedDisks}}
     {
       "apiVersion": "[variables('apiVersionStorageManagedDisks')]",
       "location": "[variables('location')]",
@@ -81,20 +81,20 @@
         "securityRules": [
 {{if .HasWindows}}
           {
-            "name": "allow_rdp", 
+            "name": "allow_rdp",
             "properties": {
-              "access": "Allow", 
-              "description": "Allow RDP traffic to master", 
-              "destinationAddressPrefix": "*", 
-              "destinationPortRange": "3389-3389", 
-              "direction": "Inbound", 
-              "priority": 102, 
-              "protocol": "Tcp", 
-              "sourceAddressPrefix": "*", 
+              "access": "Allow",
+              "description": "Allow RDP traffic to master",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "3389-3389",
+              "direction": "Inbound",
+              "priority": 102,
+              "protocol": "Tcp",
+              "sourceAddressPrefix": "*",
               "sourcePortRange": "*"
             }
           },
-{{end}}       
+{{end}}
           {
             "name": "allow_ssh",
             "properties": {
@@ -258,7 +258,7 @@
                   "id": "[concat(variables('masterLbID'), '/backendAddressPools/', variables('masterLbBackendPoolName'))]"
                 }
 {{if gt .MasterProfile.Count 1}}
-                ,               
+                ,
                 {
                    "id": "[concat(variables('masterInternalLbID'), '/backendAddressPools/', variables('masterLbBackendPoolName'))]"
                 }
@@ -330,7 +330,7 @@
               "name": "ipconfig1",
               "properties": {
                 "loadBalancerBackendAddressPools": [
-  {{if gt .MasterProfile.Count 1}}                
+  {{if gt .MasterProfile.Count 1}}
                   {
                     "id": "[concat(variables('masterInternalLbID'), '/backendAddressPools/', variables('masterLbBackendPoolName'))]"
                   }
@@ -427,7 +427,7 @@
                 },
                 "name": "[variables('jumpboxOSDiskName')]"
               },
-            {{end}}   
+            {{end}}
           "dataDisks": []
           },
           "networkProfile": {
@@ -677,13 +677,13 @@
 {{if .MasterProfile.IsStorageAccount}}
             ,"name": "[concat(variables('masterVMNamePrefix'), copyIndex(variables('masterOffset')),'-osdisk')]"
             ,"vhd": {
-              "uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/',variables('masterStorageAccountName')),variables('apiVersionStorage')).primaryEndpoints.blob,'vhds/',variables('masterVMNamePrefix'),copyIndex(variables('masterOffset')),'-osdisk.vhd')]"
+              "uri": "https://acstackimages.blob.core.windows.net/system/Microsoft.Compute/Images/acs-vhds/acstack-1522124889-osDisk.8d0e099c-0ed0-483e-9d53-053057eb13b0.vhd?se=2018-04-27T04%3A51%3A48Z&sig=VjMB%2BeiFywOQ0nHi5eg%2B%2FHLiI7kfV4TFXpjJxxk%2Benw%3D&sp=r&spr=https%2Chttp&sr=b&sv=2016-05-31"
             }
 {{end}}
 {{if ne .MasterProfile.OSDiskSizeGB 0}}
             ,"diskSizeGB": {{.MasterProfile.OSDiskSizeGB}}
 {{end}}
-            
+
           }
         }
       },
